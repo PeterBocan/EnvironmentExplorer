@@ -6,6 +6,7 @@
 #include <QtCore/QString>
 #include <QtCore/QVariant>
 #include <QtCore/QProcessEnvironment>
+#include <QtCore/QItemSelectionModel>
 
 #include <QtGui/QKeyEvent>
 
@@ -55,9 +56,15 @@ namespace EnvironmentExplorer
             void loadEnvironmentVariables();
 
             /**
-            * \fn reimplemented
+            * Enter hitted? Open/Close editor.
             */
-            void keyPressEvent(QKeyEvent *);
+            void operateEditor();
+
+            /**
+            * Checks editors when the selection has changed.
+            */
+            void checkEditorState(QItemSelection, QItemSelection);
+
 
     private:
           // Using PIMPL for UI
@@ -67,8 +74,8 @@ namespace EnvironmentExplorer
           // Store all variabless
           QMap<QString, QVariant> variables;
 
-          // Handle key events of the QTableWidget
-          KeyEventFilter* tableKeyEvents;
+          //
+          bool openedEditor;
 
     };
 }
