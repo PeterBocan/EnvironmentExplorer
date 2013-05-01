@@ -1,29 +1,37 @@
 #ifndef MAINDIALOG_H
 #define MAINDIALOG_H
 
+
 #include <QtCore/QEvent>
+#include <QtCore/QTimer>
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QVariant>
+#include <QtCore/QMultiHash>
+#include <QtCore/QHashIterator>
 #include <QtCore/QProcessEnvironment>
 #include <QtCore/QItemSelectionModel>
 
 #include <QtGui/QKeyEvent>
 
+#include <QtWidgets/QLabel>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QLineEdit>
+#include <QtWidgets/QListWidget>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QTableWidget>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QTableWidgetItem>
 
-#if defined(QT_DEBUG)
+
 #include <QtDebug>
-#endif
 
 namespace EnvironmentExplorer
 {
+    template <class NewType> NewType retype(QWidget* w)
+    { return static_cast<NewType>(w); }
+
     /*
     * Event filter onto QTableWidget
     */
@@ -35,10 +43,6 @@ namespace EnvironmentExplorer
 
     signals:
          void returnPressed();
-         void arrowUpPressed();
-         void arrowDownPressed();
-         void arrowLeftPressed();
-         void arrowRightPressed();
     };
 
     class MainDialog : public QWidget
@@ -49,6 +53,9 @@ namespace EnvironmentExplorer
             MainDialog(QWidget *parent = 0);
             ~MainDialog();
 
+    signals:
+            void edi();
+
     protected:
             /**
              * \fn Load variables from environment.
@@ -58,25 +65,66 @@ namespace EnvironmentExplorer
             /**
             * Enter hitted? Open/Close editor.
             */
-            void operateEditor();
+            void operateLineEditor();
 
             /**
             * Checks editors when the selection has changed.
             */
             void checkEditorState(QItemSelection, QItemSelection);
 
+            /**
+            * Operate list widget.
+            */
+            void operateListEditor();
+
+            /**
+            *
+            */
+            void addVariableDialog();
+
+            /**
+            *
+            */
+            void addVariable();
+
+            /**
+            *
+            */
+            void validateVariableName(QString);
+
+            /**
+            *
+            */
+            void resetVariables();
+
+            /**
+            *
+            */
+            QMultiHash<QString, QVariant> parseSystemEnvironment();
+
+            /**
+            * Commit data from editor into a model
+            */
+            void commitEditorData(QWidget*);
+
+            /**
+            *
+            */
+            void updateVariable(QModelIndex cell, const QString &find, const QString &replace);
 
     private:
           // Using PIMPL for UI
           struct Ui;
           Ui* dialogUi;
 
-          // Store all variabless
-          QMap<QString, QVariant> variables;
+          // Store all variables
+          QMultiHash<QString, QVariant> variables;
+
+          // Defaults
+          QMultiHash<QString, QVariant> defaults;
 
           //
           bool openedEditor;
-
     };
 }
 
