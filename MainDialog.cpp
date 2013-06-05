@@ -32,34 +32,115 @@ namespace EnvironmentExplorer
 
         QPushButton* saveButton,
                    * resetButton,
+                   * exportButton,
                    * addButton,
                    * closeButton;
 
         // Add Variable Dialog
-        QDialog* variableDialog;
-        QGridLayout* dialogLayout;
-        QDialogButtonBox* variableDialogButtonBox;
+        struct AddDialog
+        {
+            AddDialog()
+            {
+                dialog = new QDialog();
+                dialog->setWindowTitle("Add variable");
+                dialog->setMinimumSize(300, 100);
+                layout = new QGridLayout(dialog);
 
-        QPushButton* addVariableButton,
-                   * cancelDialogButton;
+                nameEdit = new QLineEdit();
+                nameLabel = new QLabel("Name:");
+                nameLabel->setBuddy(nameEdit);
 
-        QLabel* nameEditLabel,
-              * valueEditLabel;
+                valueEdit = new QLineEdit();
+                valueLabel = new QLabel("Value:");
+                valueLabel->setBuddy(valueEdit);
 
-        QLineEdit* nameEdit,
-                 * valueEdit;
+                dialogButtonBox = new QDialogButtonBox();
+                addButton = dialogButtonBox->addButton("Add", QDialogButtonBox::AcceptRole);
+                cancelButton = dialogButtonBox->addButton("Cancel", QDialogButtonBox::RejectRole);
+                connect(dialogButtonBox, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+                layout->addWidget(nameLabel, 0, 0);
+                layout->addWidget(nameEdit, 0, 1);
+                layout->addWidget(valueLabel, 1, 0);
+                layout->addWidget(valueEdit, 1, 1);
+                layout->addWidget(dialogButtonBox, 2, 0, 2, 0);
+            }
+
+            QDialog* dialog;
+            QGridLayout* layout;
+            QDialogButtonBox* dialogButtonBox;
+
+            QPushButton* addButton,
+                       * cancelButton;
+
+            QLabel* nameLabel,
+                  * valueLabel;
+
+            QLineEdit* nameEdit,
+                     * valueEdit;
+        };
+
+        // Edit Variable Dialog
+        struct EditDialog
+        {
+            EditDialog()
+            {
+                dialog = new QDialog();
+                dialog->setWindowTitle("Edit variable");
+                dialog->setMinimumSize(300, 100);
+                layout = new QGridLayout(dialog);
+
+                nameEdit = new QLineEdit();
+                nameLabel = new QLabel("Name:");
+                nameLabel->setBuddy(nameEdit);
+
+                valueEdit = new QLineEdit();
+                valueLabel = new QLabel("Value:");
+                valueLabel->setBuddy(valueEdit);
+
+                dialogButtonBox = new QDialogButtonBox();
+                saveButton = dialogButtonBox->addButton(QDialogButtonBox::Save);
+                cancelButton = dialogButtonBox->addButton(QDialogButtonBox::Cancel);
+                connect(dialogButtonBox, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+
+                layout->addWidget(nameLabel, 0, 0);
+                layout->addWidget(nameEdit, 0, 1);
+                layout->addWidget(valueLabel, 1, 0);
+                layout->addWidget(valueEdit, 1, 1);
+                layout->addWidget(dialogButtonBox, 2, 0, 2, 0);
+            }
+
+            QDialog* dialog;
+            QGridLayout* layout;
+            QDialogButtonBox* dialogButtonBox;
+
+            QPushButton* saveButton,
+                       * cancelButton;
+
+            QLabel* nameLabel,
+                  * valueLabel;
+
+            QLineEdit* nameEdit,
+                     * valueEdit;
+        };
+
 
 
         // Handle key events of the QTableWidget
         KeyEventFilter* tableKeyEvents,
                       * listKeyEvents;
 
+        AddDialog* addVariableDialog;
+        EditDialog* editVariableDialog;
+
         Ui::Ui() : tableKeyEvents(new KeyEventFilter),
                     listKeyEvents(new KeyEventFilter)
         {
             table = new QTableWidget();
             table->setColumnCount(2);
+            table->setContextMenuPolicy(Qt::CustomContextMenu);
             table->installEventFilter(tableKeyEvents); // install event filter
+            table->horizontalHeader()->setStretchLastSection(true);
             table->setVerticalScrollMode(QTableWidget::ScrollPerPixel);
             table->setHorizontalScrollMode(QTableWidget::ScrollPerPixel);
             table->setHorizontalHeaderLabels(QStringList() << tr("Name") << tr("Value"));
@@ -67,6 +148,7 @@ namespace EnvironmentExplorer
 
             buttonBox = new QDialogButtonBox(Qt::Horizontal);
             addButton = buttonBox->addButton(QString("Add"), QDialogButtonBox::ActionRole);
+            exportButton = buttonBox->addButton(QString("Export"), QDialogButtonBox::ActionRole);
             saveButton = buttonBox->addButton(QDialogButtonBox::Save);
             resetButton = buttonBox->addButton(QDialogButtonBox::Reset);
             closeButton = buttonBox->addButton(QDialogButtonBox::Close);
@@ -77,29 +159,10 @@ namespace EnvironmentExplorer
             layout->addWidget(buttonBox);
 
             // Add Variable Dialog...
+            addVariableDialog = new AddDialog();
 
-            variableDialog = new QDialog();
-            variableDialog->setMinimumSize(300, 100);
-            dialogLayout = new QGridLayout(variableDialog);
-
-            nameEdit = new QLineEdit();
-            nameEditLabel = new QLabel("Name:");
-            nameEditLabel->setBuddy(nameEdit);
-
-            valueEdit = new QLineEdit();
-            valueEditLabel = new QLabel("Value:");
-            valueEditLabel->setBuddy(valueEdit);
-
-            variableDialogButtonBox = new QDialogButtonBox();
-            addVariableButton = variableDialogButtonBox->addButton("Add", QDialogButtonBox::AcceptRole);
-            cancelDialogButton = variableDialogButtonBox->addButton("Cancel", QDialogButtonBox::RejectRole);
-            connect(variableDialogButtonBox, &QDialogButtonBox::rejected, variableDialog, &QDialog::close);
-
-            dialogLayout->addWidget(nameEditLabel, 0, 0);
-            dialogLayout->addWidget(nameEdit, 0, 1);
-            dialogLayout->addWidget(valueEditLabel, 1, 0);
-            dialogLayout->addWidget(valueEdit, 1, 1);
-            dialogLayout->addWidget(variableDialogButtonBox, 2, 0, 2, 0);
+            // Edit Variable Dialog...
+            editVariableDialog = new EditDialog();
         }
     }; // End of MainDialog::Ui
 
@@ -118,24 +181,31 @@ namespace EnvironmentExplorer
         connect(dialogUi->closeButton, &QPushButton::pressed, this, &QWidget::close);
         connect(dialogUi->addButton, &QPushButton::pressed, this, &MainDialog::addVariableDialog);
         connect(dialogUi->resetButton, &QPushButton::pressed, this, &MainDialog::resetVariables);
+        connect(dialogUi->saveButton, &QPushButton::pressed, this, &MainDialog::saveVariables);
 
         // connect signals to slots
         connect(dialogUi->table, &QTableWidget::doubleClicked, this, &MainDialog::operateLineEditor);
         connect(dialogUi->tableKeyEvents, &KeyEventFilter::returnPressed, this, &MainDialog::operateLineEditor);
         connect(dialogUi->table->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MainDialog::checkEditorState);
         connect(dialogUi->table->itemDelegate(), &QAbstractItemDelegate::commitData, this, &MainDialog::commitEditorData);
+        connect(dialogUi->table, &QTableWidget::customContextMenuRequested, this, &MainDialog::contextMenu);
 
         // Add Variable dialog
-        connect(dialogUi->variableDialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::addVariable);
-        connect(dialogUi->nameEdit, &QLineEdit::textChanged, this, &MainDialog::validateVariableName);
+        connect(dialogUi->addVariableDialog->dialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::addVariable);
+        connect(dialogUi->addVariableDialog->nameEdit, &QLineEdit::textChanged, this, &MainDialog::validateVariableName);
         connect(dialogUi->listKeyEvents, &KeyEventFilter::returnPressed, this, &MainDialog::operateListEditor);
 
+        // Edit Variable dialog
+        connect(dialogUi->editVariableDialog->dialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::editVariable);
+        connect(dialogUi->editVariableDialog->nameEdit, &QLineEdit::textChanged, this, &MainDialog::validateVariableName);
 
         // set up layout
         setLayout(dialogUi->layout);
 
         // parse system variables
         defaults = parseSystemEnvironment();
+        // do a copy.
+        variables = defaults;
 
         // load environment
         loadEnvironmentVariables();
@@ -223,7 +293,6 @@ namespace EnvironmentExplorer
                         item->setFlags(item->flags() | Qt::ItemIsEditable);
                     }
 
-
                     // set focus on it.
                     listEditor->setFocus();
                     listEditor->setCurrentRow(0);
@@ -249,7 +318,8 @@ namespace EnvironmentExplorer
 
         QModelIndex currentListEditorIndex = dialogUi->table->selectionModel()->currentIndex(); // get position of listWidget in the table
         QListWidget* list =
-                retype<QListWidget*>(dialogUi->table->cellWidget(currentListEditorIndex.row(), currentListEditorIndex.column())); // get list widget
+                retype<QListWidget*>(dialogUi->table->cellWidget(currentListEditorIndex.row(),
+                                                                 currentListEditorIndex.column())); // get list widget
 
         if (openedEditor) {
             list->closePersistentEditor(list->currentItem());
@@ -277,23 +347,23 @@ namespace EnvironmentExplorer
     }
 
     void MainDialog::addVariableDialog()
-    { dialogUi->variableDialog->show(); }
+    { dialogUi->addVariableDialog->dialog->show(); }
 
     void MainDialog::addVariable()
     {
-        QTableWidgetItem* varNameItem = new QTableWidgetItem(dialogUi->nameEdit->text());
-        QTableWidgetItem* varValueItem = new QTableWidgetItem(dialogUi->valueEdit->text());
+        QTableWidgetItem* varNameItem = new QTableWidgetItem(dialogUi->addVariableDialog->nameEdit->text());
+        QTableWidgetItem* varValueItem = new QTableWidgetItem(dialogUi->addVariableDialog->valueEdit->text());
 
         dialogUi->table->insertRow(dialogUi->table->rowCount());
 
         dialogUi->table->setItem(dialogUi->table->rowCount() - 1, 0, varNameItem);
         dialogUi->table->setItem(dialogUi->table->rowCount() - 1, 1, varValueItem);
 
-        dialogUi->variableDialog->hide();
+        dialogUi->addVariableDialog->dialog->hide();
 
         // reset
-        dialogUi->nameEdit->setText("");
-        dialogUi->valueEdit->setText("");
+        dialogUi->addVariableDialog->nameEdit->setText("");
+        dialogUi->addVariableDialog->valueEdit->setText("");
     }
 
     void MainDialog::validateVariableName(QString currentText)
@@ -304,7 +374,13 @@ namespace EnvironmentExplorer
         if (variables.keys().contains(currentText)) disabled = true;
         else disabled = false;
 
-        dialogUi->addVariableButton->setDisabled(disabled);
+        QLineEdit* nameEdit = reinterpret_cast<QLineEdit*>(sender());
+        QDialogButtonBox* buttonBox = nameEdit->parentWidget()->findChildren<QDialogButtonBox*>().at(0);
+
+        if (buttonBox)
+            foreach (QAbstractButton* button, buttonBox->buttons())
+                 if (buttonBox->buttonRole(button) == QDialogButtonBox::AcceptRole)
+                     button->setDisabled(disabled);
     }
 
     void MainDialog::resetVariables()
@@ -361,6 +437,18 @@ namespace EnvironmentExplorer
 
     }
 
+    void MainDialog::contextMenu(QPoint)
+    {
+        QMenu menu;
+        QAction* editAction = menu.addAction("Edit variable");
+        connect(editAction, &QAction::triggered, this, &MainDialog::editVariable);
+
+        QAction* removeAction = menu.addAction("Remove variable");
+        connect(removeAction, &QAction::triggered, this, &MainDialog::removeVariable);
+
+        menu.exec(QCursor::pos());
+    }
+
     void MainDialog::commitEditorData(QWidget *editor)
     {
         QLineEdit* lineEdit = retype<QLineEdit*>(editor);
@@ -383,6 +471,37 @@ namespace EnvironmentExplorer
         }
 
         updateVariable(dialogUi->table->currentIndex(), currentItem->text(), lineEdit->text());
+    }
+
+
+    void MainDialog::editVariable()
+    {
+        dialogUi->editVariableDialog->nameEdit->setText(
+            dialogUi->table->model()->data(
+                 dialogUi->table->model()->index(
+                      dialogUi->table->currentItem()->row(), 0
+        )).toString());
+
+        QVariant data = dialogUi->table->model()->data(dialogUi->table->model()->index(dialogUi->table->currentItem()->row(), 1));
+
+        dialogUi->editVariableDialog->valueEdit->setText(data.toString().replace("\n", ";"));
+        dialogUi->editVariableDialog->dialog->show();
+
+    }
+
+    void MainDialog::removeVariable()
+    {
+        QString variableName = dialogUi->table->model()->data(dialogUi->table->model()->index(dialogUi->table->currentIndex().row(), 0)).toString();
+
+        qDebug() << "[removeVariable] " << variableName << endl;
+        variables.remove(variableName);
+
+        dialogUi->table->removeRow(dialogUi->table->currentItem()->row());
+    }
+
+    void MainDialog::saveVariables()
+    {
+
     }
 
 }

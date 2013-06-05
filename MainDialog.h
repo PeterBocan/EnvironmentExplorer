@@ -14,16 +14,19 @@
 
 #include <QtGui/QKeyEvent>
 
+#include <QtWidgets/QMenu>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QDialog>
+#include <QtWidgets/QAction>
 #include <QtWidgets/QLineEdit>
+#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QMessageBox>
 #include <QtWidgets/QTableWidget>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QTableWidgetItem>
-
 
 #include <QtDebug>
 
@@ -52,9 +55,6 @@ namespace EnvironmentExplorer
     public:
             MainDialog(QWidget *parent = 0);
             ~MainDialog();
-
-    signals:
-            void edi();
 
     protected:
             /**
@@ -100,6 +100,11 @@ namespace EnvironmentExplorer
             /**
             *
             */
+            void editVariable();
+
+            /**
+            *
+            */
             QMultiHash<QString, QVariant> parseSystemEnvironment();
 
             /**
@@ -110,7 +115,24 @@ namespace EnvironmentExplorer
             /**
             *
             */
-            void updateVariable(QModelIndex cell, const QString &find, const QString &replace);
+            void updateVariable(QModelIndex cell,
+                                const QString &find,
+                                const QString &replace);
+
+            /**
+            *
+            */
+            void removeVariable();
+
+            /**
+            * Context menu
+            */
+            void contextMenu(QPoint pos);
+
+            /**
+            *
+            */
+            void saveVariables();
 
     private:
           // Using PIMPL for UI
