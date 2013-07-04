@@ -1,12 +1,13 @@
 #ifndef MAINDIALOG_H
 #define MAINDIALOG_H
 
-
+#include <QtCore/QPair>
 #include <QtCore/QEvent>
 #include <QtCore/QTimer>
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtCore/QVariant>
+#include <QtCore/QSettings>
 #include <QtCore/QMultiHash>
 #include <QtCore/QHashIterator>
 #include <QtCore/QProcessEnvironment>
@@ -105,7 +106,12 @@ namespace EnvironmentExplorer
             /**
             *
             */
-            QMultiHash<QString, QVariant> parseSystemEnvironment();
+            void addVariableValue();
+
+            /**
+            *
+            */
+            QList<QPair<QString, QVariant> > parseSystemEnvironment(const QSettings &env);
 
             /**
             * Commit data from editor into a model
@@ -144,6 +150,9 @@ namespace EnvironmentExplorer
 
           // Defaults
           QMultiHash<QString, QVariant> defaults;
+
+          QSettings *userSettings,
+                    *globalSettings;
 
           //
           bool openedEditor;
