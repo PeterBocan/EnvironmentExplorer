@@ -16,4 +16,5 @@ TEMPLATE = app
 SOURCES += main.cpp\
         MainDialog.cpp
 
-HEADERS  += MainDialog.h
+HEADERS  += MainDialog.h \
+    MainDialogUi.h

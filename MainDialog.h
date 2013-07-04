@@ -15,21 +15,9 @@
 
 #include <QtGui/QKeyEvent>
 
-#include <QtWidgets/QMenu>
-#include <QtWidgets/QLabel>
-#include <QtWidgets/QDialog>
-#include <QtWidgets/QAction>
-#include <QtWidgets/QLineEdit>
-#include <QtWidgets/QHeaderView>
-#include <QtWidgets/QListWidget>
-#include <QtWidgets/QPushButton>
-#include <QtWidgets/QVBoxLayout>
-#include <QtWidgets/QMessageBox>
-#include <QtWidgets/QTableWidget>
-#include <QtWidgets/QDialogButtonBox>
-#include <QtWidgets/QTableWidgetItem>
-
 #include <QtDebug>
+
+#include <QtWidgets/QWidget>
 
 namespace EnvironmentExplorer
 {
@@ -47,6 +35,7 @@ namespace EnvironmentExplorer
 
     signals:
          void returnPressed();
+         void deletePressed();
     };
 
     class MainDialog : public QWidget
@@ -111,19 +100,23 @@ namespace EnvironmentExplorer
             /**
             *
             */
+            void updateVariable(QModelIndex cell,
+                                const QString &find,
+                                const QString &replace);
+
+            /**
+             */
+            void updateTableVariable();
+
+            /**
+            *
+            */
             QList<QPair<QString, QVariant> > parseSystemEnvironment(const QSettings &env);
 
             /**
             * Commit data from editor into a model
             */
             void commitEditorData(QWidget*);
-
-            /**
-            *
-            */
-            void updateVariable(QModelIndex cell,
-                                const QString &find,
-                                const QString &replace);
 
             /**
             *

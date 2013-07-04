@@ -1,9 +1,8 @@
 #include "MainDialog.h"
+#include "MainDialogUi.h"
 
 #include <QVariant>
 #include <QSettings>
-#include <QFormLayout>
-#include <QCheckBox>
 
 #if defined(Q_OS_WIN)
 #include <qt_windows.h>
@@ -25,170 +24,12 @@ namespace EnvironmentExplorer
             switch (keyEvent->key())
             {
                 case Qt::Key_Return: { returnPressed(); return true; }
+                case Qt::Key_Delete: { deletePressed(); return true; }
                 default: return o->event(e);
             }
         }
         else return o->event(e);
     }
-
-    //
-    // UI structure.
-    //
-    struct MainDialog::Ui
-    {
-        // Main Dialog
-        QVBoxLayout* layout;
-        QTableWidget* table;
-        QDialogButtonBox* buttonBox;
-
-        QPushButton* saveButton,
-                   * resetButton,
-                   * exportButton,
-                   * addButton,
-                   * closeButton;
-
-        // Add Variable Dialog
-        struct AddDialog
-        {
-            AddDialog()
-            {
-                dialog = new QDialog();
-                dialog->setWindowTitle("Add variable");
-                dialog->setMinimumSize(300, 100);
-                layout = new QGridLayout(dialog);
-
-                nameEdit = new QLineEdit();
-                nameLabel = new QLabel("Name:");
-                nameLabel->setBuddy(nameEdit);
-
-                valueEdit = new QLineEdit();
-                valueLabel = new QLabel("Value:");
-                valueLabel->setBuddy(valueEdit);
-
-                dialogButtonBox = new QDialogButtonBox();
-                addButton = dialogButtonBox->addButton("Add", QDialogButtonBox::AcceptRole);
-                cancelButton = dialogButtonBox->addButton("Cancel", QDialogButtonBox::RejectRole);
-                connect(dialogButtonBox, &QDialogButtonBox::rejected, dialog, &QDialog::close);
-
-                layout->addWidget(nameLabel, 0, 0);
-                layout->addWidget(nameEdit, 0, 1);
-                layout->addWidget(valueLabel, 1, 0);
-                layout->addWidget(valueEdit, 1, 1);
-                layout->addWidget(dialogButtonBox, 2, 0, 2, 0);
-            }
-
-            QDialog* dialog;
-            QGridLayout* layout;
-            QDialogButtonBox* dialogButtonBox;
-
-            QPushButton* addButton,
-                       * cancelButton;
-
-            QLabel* nameLabel,
-                  * valueLabel;
-
-            QLineEdit* nameEdit,
-                     * valueEdit;
-        };
-
-        // Edit Variable Dialog
-        struct EditDialog
-        {
-            EditDialog()
-            {
-                dialog = new QDialog();
-                dialog->setWindowTitle("Edit variable");
-                dialog->setMinimumSize(300, 140);
-                layout = new QGridLayout(dialog);
-
-                nameEdit = new QLineEdit();
-                nameLabel = new QLabel("Name:");
-                nameLabel->setBuddy(nameEdit);
-
-                valueEdit = new QLineEdit();
-                valueLabel = new QLabel("Value:");
-                valueLabel->setBuddy(valueEdit);
-
-                multiValuesCheck = new QCheckBox("Multiple values");
-                multiValuesCheck->setChecked(false);
-
-                itemList = new QListWidget();
-                itemList->setEditTriggers(QListWidget::AnyKeyPressed);
-
-                QListWidgetItem* addItemItem = new QListWidgetItem(itemList);
-                addItemItem->setFlags(Qt::ItemIsEnabled|Qt::ItemIsSelectable);
-
-                dialogButtonBox = new QDialogButtonBox();
-                saveButton = dialogButtonBox->addButton(QDialogButtonBox::Save);
-                cancelButton = dialogButtonBox->addButton(QDialogButtonBox::Cancel);
-                connect(dialogButtonBox, &QDialogButtonBox::rejected, dialog, &QDialog::close);
-
-                layout->addWidget(nameLabel, 0, 0);
-                layout->addWidget(nameEdit, 0, 1);
-                layout->addWidget(valueLabel, 1, 0);
-                layout->addWidget(valueEdit, 1, 1);
-                layout->addWidget(multiValuesCheck, 2, 1 );
-                layout->addWidget(dialogButtonBox, 3, 0, 2, 0);
-            }
-
-            QDialog* dialog;
-            QGridLayout* layout;
-            QDialogButtonBox* dialogButtonBox;
-
-            QCheckBox* multiValuesCheck;
-
-            QPushButton* saveButton,
-                       * cancelButton;
-
-            QLabel* nameLabel,
-                  * valueLabel;
-
-            QLineEdit* nameEdit,
-                     * valueEdit;
-
-            QListWidget* itemList;
-        };
-
-        // Handle key events of the QTableWidget
-        KeyEventFilter* tableKeyEvents,
-                      * listKeyEvents;
-
-        AddDialog* addVariableDialog;
-        EditDialog* editVariableDialog;
-
-        Ui() : tableKeyEvents(new KeyEventFilter),
-               listKeyEvents(new KeyEventFilter)
-        {
-            table = new QTableWidget();
-            table->setColumnCount(2);
-            table->setContextMenuPolicy(Qt::CustomContextMenu);
-            table->installEventFilter(tableKeyEvents); // install event filter
-            table->horizontalHeader()->setStretchLastSection(true);
-            table->setVerticalScrollMode(QTableWidget::ScrollPerPixel);
-            table->setHorizontalScrollMode(QTableWidget::ScrollPerPixel);
-            table->setHorizontalHeaderLabels(QStringList() << tr("Name") << tr("Value"));
-            table->itemDelegate()->setObjectName("vars_table_item_delegate");
-
-            buttonBox = new QDialogButtonBox(Qt::Horizontal);
-            addButton = buttonBox->addButton(QString("Add"), QDialogButtonBox::ActionRole);
-            exportButton = buttonBox->addButton(QString("Export"), QDialogButtonBox::ActionRole);
-            saveButton = buttonBox->addButton(QDialogButtonBox::Save);
-            resetButton = buttonBox->addButton(QDialogButtonBox::Reset);
-            closeButton = buttonBox->addButton(QDialogButtonBox::Close);
-
-            layout = new QVBoxLayout();
-            layout->setContentsMargins(5,5,5,5);
-            layout->addWidget(table);
-            layout->addWidget(buttonBox);
-
-            // Add Variable Dialog...
-            addVariableDialog = new AddDialog();
-
-            // Edit Variable Dialog...
-            editVariableDialog = new EditDialog();
-        }
-
-    }; // End of MainDialog::Ui
 
     //
     //
@@ -220,10 +61,20 @@ namespace EnvironmentExplorer
         connect(dialogUi->listKeyEvents, &KeyEventFilter::returnPressed, this, &MainDialog::operateListEditor);
 
         // Edit Variable dialog
-        connect(dialogUi->editVariableDialog->dialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::editVariable);
+        connect(dialogUi->editVariableDialog->dialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::updateTableVariable);
         connect(dialogUi->editVariableDialog->nameEdit, &QLineEdit::textChanged, this, &MainDialog::validateVariableName);
+        connect(dialogUi->editVariableDialog->itemList, &QListWidget::itemDoubleClicked,
+            [&](QListWidgetItem* selected){
+                if (selected == dialogUi->editVariableDialog->addItemItem) {
+                    QListWidgetItem* newItem = new QListWidgetItem();
+                    newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
+                    dialogUi->editVariableDialog->itemList->insertItem(dialogUi->editVariableDialog->itemList->count() - 1, newItem);
+                } else
+                    dialogUi->editVariableDialog->itemList->editItem(selected);
+        });
+
         connect(dialogUi->editVariableDialog->multiValuesCheck, &QCheckBox::stateChanged,
-             [=](int state) {
+             [&](int state) {
                 if (state == Qt::Checked) {
                     dialogUi->editVariableDialog->valueEdit->hide();
                     dialogUi->editVariableDialog->layout->removeWidget(dialogUi->editVariableDialog->valueEdit);
@@ -291,9 +142,9 @@ namespace EnvironmentExplorer
         foreach (pair, globalPairing) // global ones.
         {
             QTableWidgetItem* name = new QTableWidgetItem(pair.first);
-                              name->setBackground(QBrush(QColor(255, 174, 201)));
+                              name->setBackground(QBrush(QColor(203, 238, 255)));
             QTableWidgetItem* value = new QTableWidgetItem();
-                              value->setBackground(QBrush(QColor(255, 174, 201)));
+                              value->setBackground(QBrush(QColor(203, 238, 255)));
 
             switch(pair.second.type())
             {
@@ -313,10 +164,10 @@ namespace EnvironmentExplorer
         foreach (pair, userPairing)
         {
             QTableWidgetItem* name = new QTableWidgetItem(pair.first);
-            name->setBackground(QBrush(QColor(188, 241, 202)));
+            name->setBackground(QBrush(Qt::white));
 
             QTableWidgetItem* value = new QTableWidgetItem();
-            value->setBackground(QBrush(QColor(188, 241, 202)));
+            value->setBackground(QBrush(Qt::white));
 
             switch(pair.second.type())
             {
@@ -362,7 +213,7 @@ namespace EnvironmentExplorer
                     listEditor->setEditTriggers(QListWidget::AnyKeyPressed);
                     listEditor->itemDelegate()->setObjectName(QString("list_itemdelegate_%1").arg(currentItem->row()));
 
-                    connect(listEditor, &QListWidget::itemDoubleClicked, [=](QListWidgetItem* item) { listEditor->editItem(item); });
+                    connect(listEditor, &QListWidget::itemDoubleClicked, [&](QListWidgetItem* item) { listEditor->editItem(item); });
                     connect(listEditor->itemDelegate(), &QAbstractItemDelegate::commitData, this, &MainDialog::commitEditorData);
 
                     // set list widget as cell widget.
@@ -499,6 +350,11 @@ namespace EnvironmentExplorer
         qDebug() << cell << find << replace;
     }
 
+    void MainDialog::updateTableVariable()
+    {
+
+    }
+
     void MainDialog::contextMenu(QPoint)
     {
         QMenu menu;
@@ -553,23 +409,33 @@ namespace EnvironmentExplorer
 
     void MainDialog::editVariable()
     {
+        qDebug() << "[editVariable]" << sender() << endl;
+
         dialogUi->editVariableDialog->nameEdit->setText(
-            dialogUi->table->model()->data(
-                 dialogUi->table->model()->index(
-                      dialogUi->table->currentItem()->row(), 0
-        )).toString());
+                    dialogUi->table->model()->data(
+                        dialogUi->table->model()->index(
+                            dialogUi->table->currentItem()->row(), 0
+                            )).toString());
 
         QVariant data = dialogUi->table->model()->data(dialogUi->table->model()->index(dialogUi->table->currentItem()->row(), 1));
 
         QStringList dataList = data.toString().split("\n");
         int count = dialogUi->editVariableDialog->itemList->count();
-        foreach (QString item, dataList)
-            dialogUi->editVariableDialog->itemList->insertItem(count - 1, item);
+        foreach (QString item, dataList) {
+            QListWidgetItem* listItem = new QListWidgetItem(item);
+            listItem->setFlags(listItem->flags()|Qt::ItemIsEditable);
+            dialogUi->editVariableDialog->itemList->insertItem(count - 1, listItem);
+        }
 
         dialogUi->editVariableDialog->valueEdit->setText(data.toString().replace("\n", ";"));
         dialogUi->editVariableDialog->multiValuesCheck->setChecked(true);
-        dialogUi->editVariableDialog->dialog->show();
+        dialogUi->editVariableDialog->nameEdit->setFocus();
 
+        int result = dialogUi->editVariableDialog->dialog->exec();
+        if (result == QDialog::Accepted)
+        {
+
+        }
     }
 
     void MainDialog::removeVariable()
