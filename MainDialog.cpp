@@ -1,457 +1,284 @@
 #include "MainDialog.h"
 #include "MainDialogUi.h"
+#include "VariablesManager.h"
 
+#include <QApplication>
+#include <QTime>
 #include <QVariant>
-#include <QSettings>
+#include <QFile>
+#include <QString>
+#include <QtDebug>
 
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN32)
 #include <qt_windows.h>
 #endif
 
 namespace EnvironmentExplorer
 {
 
-    bool expandEnvironment(const QMultiHash<QString, QVariant> &env);
-
-    //
-    // Installs event filter for Return key.
-    //
-    bool KeyEventFilter::eventFilter(QObject *o, QEvent *e)
-    {
-        if(e->type() == QEvent::KeyPress)
-        {
-            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(e);
-            switch (keyEvent->key())
-            {
-                case Qt::Key_Return: { returnPressed(); return true; }
-                case Qt::Key_Delete: { deletePressed(); return true; }
-                default: return o->event(e);
-            }
-        }
-        else return o->event(e);
-    }
-
-    //
-    //
-    //
-    //
-    //
     MainDialog::MainDialog(QWidget *parent)
-        : QWidget(parent), dialogUi(new MainDialog::Ui), openedEditor(false)
+        : QWidget(parent), ui(new UserInterface()),
+          variableManager(new VariablesManager()),
+          variableDialog(new VariableDialog(this))
     {
         setWindowTitle(tr("Environment explorer"));
-        setMinimumSize(850, 600);
+        setLayout(ui->layout);
 
-        // connect buttons to actions
-        connect(dialogUi->closeButton, &QPushButton::pressed, this, &QWidget::close);
-        connect(dialogUi->addButton, &QPushButton::pressed, this, &MainDialog::addVariableDialog);
-        connect(dialogUi->resetButton, &QPushButton::pressed, this, &MainDialog::resetVariables);
-        connect(dialogUi->saveButton, &QPushButton::pressed, this, &MainDialog::saveVariables);
+        resize(850, 600);
 
-        // connect signals to slots
-        connect(dialogUi->table, &QTableWidget::doubleClicked, this, &MainDialog::operateLineEditor);
-        connect(dialogUi->tableKeyEvents, &KeyEventFilter::returnPressed, this, &MainDialog::operateLineEditor);
-        connect(dialogUi->table->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MainDialog::checkEditorState);
-        connect(dialogUi->table->itemDelegate(), &QAbstractItemDelegate::commitData, this, &MainDialog::commitEditorData);
-        connect(dialogUi->table, &QTableWidget::customContextMenuRequested, this, &MainDialog::contextMenu);
+        initConnections();
 
-        // Add Variable dialog
-        connect(dialogUi->addVariableDialog->dialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::addVariable);
-        connect(dialogUi->addVariableDialog->nameEdit, &QLineEdit::textChanged, this, &MainDialog::validateVariableName);
-        connect(dialogUi->listKeyEvents, &KeyEventFilter::returnPressed, this, &MainDialog::operateListEditor);
-
-        // Edit Variable dialog
-        connect(dialogUi->editVariableDialog->dialogButtonBox, &QDialogButtonBox::accepted, this, &MainDialog::updateTableVariable);
-        connect(dialogUi->editVariableDialog->nameEdit, &QLineEdit::textChanged, this, &MainDialog::validateVariableName);
-        connect(dialogUi->editVariableDialog->itemList, &QListWidget::itemDoubleClicked,
-            [&](QListWidgetItem* selected){
-                if (selected == dialogUi->editVariableDialog->addItemItem) {
-                    QListWidgetItem* newItem = new QListWidgetItem();
-                    newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
-                    dialogUi->editVariableDialog->itemList->insertItem(dialogUi->editVariableDialog->itemList->count() - 1, newItem);
-                } else
-                    dialogUi->editVariableDialog->itemList->editItem(selected);
-        });
-
-        connect(dialogUi->editVariableDialog->multiValuesCheck, &QCheckBox::stateChanged,
-             [&](int state) {
-                if (state == Qt::Checked) {
-                    dialogUi->editVariableDialog->valueEdit->hide();
-                    dialogUi->editVariableDialog->layout->removeWidget(dialogUi->editVariableDialog->valueEdit);
-                    dialogUi->editVariableDialog->layout->addWidget(dialogUi->editVariableDialog->itemList, 1, 1);
-                    dialogUi->editVariableDialog->itemList->show();
-                } else {
-                    dialogUi->editVariableDialog->itemList->hide();
-                    dialogUi->editVariableDialog->layout->removeWidget(dialogUi->editVariableDialog->itemList);
-                    dialogUi->editVariableDialog->layout->addWidget( dialogUi->editVariableDialog->valueEdit, 1, 1);
-                    dialogUi->editVariableDialog->valueEdit->show();
-                }
-                dialogUi->editVariableDialog->dialog->resize(
-                    dialogUi->editVariableDialog->dialog->sizeHint());
-        });
-
-        // set up layout
-        setLayout(dialogUi->layout);
-
-        // load environment
-        loadEnvironmentVariables();
-
-        // select the first one
-        QModelIndex index = dialogUi->table->model()->index(0,0);
-        dialogUi->table->selectionModel()->select(index, QItemSelectionModel::Select);
+        variableManager->loadVariables();
+        fillTable();
     }
 
     MainDialog::~MainDialog()
-    { delete dialogUi; }
+    { delete ui; }
 
-    QList<QPair<QString, QVariant> > MainDialog::parseSystemEnvironment(const QSettings &env)
+    void MainDialog::initConnections()
     {
-        QList<QPair<QString, QVariant> > result;
+        // panel...
+        connect(ui->addButton, &QPushButton::pressed, this, &MainDialog::addVariable);
+        connect(ui->closeButton, &QPushButton::pressed, this, &MainDialog::close);
+        connect(ui->exportButton, &QPushButton::pressed, this, &MainDialog::exportEnvironment);
+        connect(ui->saveButton, &QPushButton::pressed, this, &MainDialog::saveEnvironment);
+        connect(ui->resetButton, &QPushButton::pressed, this, &MainDialog::resetTable);
 
-        foreach (QString key, env.allKeys())
+        // table...
+        connect(ui->mainTable, &QTableWidget::itemDoubleClicked, this, &MainDialog::editVariable);
+        connect(ui->mainTable, &QTableWidget::customContextMenuRequested, this, &MainDialog::contextMenu);
+    }
+
+    void MainDialog::fillTable()
+    {
+        QList<Variable> systems = variableManager->systemEnvironment();
+        QList<Variable> locals = variableManager->userEnvironment();
+
+        int count_systems = systems.count();
+        int count_locals = locals.count();
+        ui->mainTable->setRowCount(count_locals + count_systems);
+
+        for(int i = 0; i < count_systems; i++)
         {
-            QPair<QString, QVariant> pair;
-            pair.first = key;
+            Variable var = systems.at(i);
+            QTableWidgetItem* nameItem = new QTableWidgetItem(var.name);
+            nameItem->setBackground(QBrush(QColor(255,247,193)));
 
-            QString valueString = env.value(key).toString();
-            QVariant value = (valueString.contains(";")) ? QVariant(valueString.split(";")) : QVariant(valueString);
-            pair.second = value;
+            QString result = var.defaultValue.toString();
+            if (var.defaultValue.type() == QMetaType::QStringList ||
+                var.defaultValue.type() == QVariant::StringList)
+                result = var.defaultValue.toStringList().join("\n");
 
-            result.append(pair);
+            QTableWidgetItem* valueItem = new QTableWidgetItem(result);
+            valueItem->setBackground(QBrush(QColor(255,247,193)));
+
+            ui->mainTable->setItem(i, 0, nameItem);
+            ui->mainTable->setItem(i, 1, valueItem);
         }
 
-        return result;
-    }
-
-
-    /*
-    * Load environment variables from the OS.
-    */
-    void MainDialog::loadEnvironmentVariables()
-    {
-        userSettings = new QSettings("HKEY_CURRENT_USER\\Environment", QSettings::NativeFormat);
-        globalSettings = new QSettings("HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", QSettings::NativeFormat);
-
-        QList<QPair<QString, QVariant> > userPairing = parseSystemEnvironment(*userSettings);
-        QList<QPair<QString, QVariant> > globalPairing = parseSystemEnvironment(*globalSettings);
-
-        dialogUi->table->setRowCount(userPairing.count() + globalPairing.count());
-
-        int n = 0;
-        QPair<QString, QVariant> pair;
-        foreach (pair, globalPairing) // global ones.
+        for (int i = 0; i < count_locals; ++i)
         {
-            QTableWidgetItem* name = new QTableWidgetItem(pair.first);
-                              name->setBackground(QBrush(QColor(203, 238, 255)));
-            QTableWidgetItem* value = new QTableWidgetItem();
-                              value->setBackground(QBrush(QColor(203, 238, 255)));
+            Variable var = locals.at(i);
+            QTableWidgetItem* nameItem = new QTableWidgetItem(var.name);
 
-            switch(pair.second.type())
-            {
-                case QMetaType::QStringList:
-                   value->setText(pair.second.toStringList().join("\n"));
-                break;
-                default:
-                   value->setText(pair.second.toString());
-                break;
-            }
+            QString result = var.defaultValue.toString();
+            if (var.defaultValue.type() == QMetaType::QStringList ||
+                var.defaultValue.type() == QVariant::StringList)
+                result = var.defaultValue.toStringList().join("\n");
 
-            dialogUi->table->setItem(n, 0, name);
-            dialogUi->table->setItem(n, 1, value);
-            n++;
+            QTableWidgetItem* valueItem = new QTableWidgetItem(result);
+
+            ui->mainTable->setItem(i + count_systems, 0, nameItem);
+            ui->mainTable->setItem(i + count_systems, 1, valueItem);
         }
 
-        foreach (pair, userPairing)
-        {
-            QTableWidgetItem* name = new QTableWidgetItem(pair.first);
-            name->setBackground(QBrush(Qt::white));
-
-            QTableWidgetItem* value = new QTableWidgetItem();
-            value->setBackground(QBrush(Qt::white));
-
-            switch(pair.second.type())
-            {
-                case QMetaType::QStringList:
-                     value->setText(pair.second.toStringList().join("\n"));
-                break;
-                default:
-                     value->setText(pair.second.toString());
-                break;
-            }
-
-            dialogUi->table->setItem(n, 0, name);
-            dialogUi->table->setItem(n, 1, value);
-            n++;
-        }
-
-        // resize table to its content
-        dialogUi->table->resizeColumnsToContents();
-        dialogUi->table->resizeRowsToContents();
+        ui->mainTable->resizeColumnsToContents();
+        ui->mainTable->resizeRowsToContents();
     }
 
-    // Will be executed on key pressed event
-    void MainDialog::operateLineEditor()
-    {
-        if (openedEditor) {
-            dialogUi->table->closePersistentEditor(dialogUi->table->selectedItems().at(0));
-            openedEditor = false;
-        } else {
-            QTableWidgetItem *currentItem = dialogUi->table->selectedItems().at(0);
-
-            // if it has multiple lines ...
-            if (currentItem->text().contains("\n"))
-            {
-                QWidget* currentWidget = dialogUi->table->cellWidget(currentItem->row(), currentItem->column());
-
-                // if it is not set ...
-                if (!currentWidget)
-                {
-                    QListWidget* listEditor = new QListWidget();
-                    listEditor->setObjectName(QString("listedit_r%1").arg(currentItem->row()));
-                    listEditor->installEventFilter(dialogUi->listKeyEvents);
-                    listEditor->addItems(currentItem->text().split("\n", QString::SkipEmptyParts));
-                    listEditor->setEditTriggers(QListWidget::AnyKeyPressed);
-                    listEditor->itemDelegate()->setObjectName(QString("list_itemdelegate_%1").arg(currentItem->row()));
-
-                    connect(listEditor, &QListWidget::itemDoubleClicked, [&](QListWidgetItem* item) { listEditor->editItem(item); });
-                    connect(listEditor->itemDelegate(), &QAbstractItemDelegate::commitData, this, &MainDialog::commitEditorData);
-
-                    // set list widget as cell widget.
-                    dialogUi->table->setCellWidget(currentItem->row(), currentItem->column(), listEditor);
-
-                    // for each item set flags as "editable"
-                    for (int i = 0; i < listEditor->count(); ++i) {
-                        QListWidgetItem* item = listEditor->item(i);
-                        item->setFlags(item->flags() | Qt::ItemIsEditable);
-                    }
-
-                    // set focus on it.
-                    listEditor->setFocus();
-                    listEditor->setCurrentRow(0);
-                    listEditor->item(0)->setSelected(true);
-
-                    qDebug() << "MainDialog" << endl;
-                    openedEditor = false;
-                }
-                else
-                {
-                    dialogUi->table->closePersistentEditor(dialogUi->table->selectedItems().at(0));
-                    openedEditor = false;
-                }
-            }
-            else
-            {   // if it has only a single value
-                dialogUi->table->editItem(currentItem);
-                openedEditor = true;
-            }
-        }
-    }
-
-    void MainDialog::operateListEditor()
-    {
-        qDebug() << "[operateListEditor]";
-
-        QModelIndex currentListEditorIndex = dialogUi->table->selectionModel()->currentIndex(); // get position of listWidget in the table
-        QListWidget* list =
-                retype<QListWidget*>(dialogUi->table->cellWidget(currentListEditorIndex.row(),
-                                                                 currentListEditorIndex.column())); // get list widget
-
-        if (openedEditor) {
-            list->closePersistentEditor(list->currentItem());
-            openedEditor = false;
-        } else {
-            list->editItem(list->currentItem());
-            openedEditor = true;
-        }
-    }
-
-    void MainDialog::checkEditorState(QItemSelection /*selected*/, QItemSelection deselected)
-    {
-        // on initialization (empty list) this is going to crash.
-        if (deselected.empty()) return;
-
-        foreach (QModelIndex index, deselected.indexes()) {
-            QTableWidgetItem* cell = dialogUi->table->item(index.row(), index.column());
-            dialogUi->table->closePersistentEditor(cell);
-        }
-        openedEditor = false;
-
-        dialogUi->table->setFocus(); // set focus from list widget to table
-    }
-
-    void MainDialog::addVariableDialog()
-    { dialogUi->addVariableDialog->dialog->show(); }
-
-    void MainDialog::addVariable()
-    {
-        QTableWidgetItem* varNameItem = new QTableWidgetItem(dialogUi->addVariableDialog->nameEdit->text());
-        QTableWidgetItem* varValueItem = new QTableWidgetItem(dialogUi->addVariableDialog->valueEdit->text());
-
-        dialogUi->table->insertRow(dialogUi->table->rowCount());
-
-        dialogUi->table->setItem(dialogUi->table->rowCount() - 1, 0, varNameItem);
-        dialogUi->table->setItem(dialogUi->table->rowCount() - 1, 1, varValueItem);
-
-        dialogUi->addVariableDialog->dialog->hide();
-
-        // reset
-        dialogUi->addVariableDialog->nameEdit->setText("");
-        dialogUi->addVariableDialog->valueEdit->setText("");
-    }
-
-    void MainDialog::validateVariableName(QString currentText)
-    {
-        bool disabled = true;
-
-        // if already contains that variable name, disallow adding of a new variable
-        if (variables.contains(currentText)) disabled = true;
-        else disabled = false;
-
-        QLineEdit* nameEdit = reinterpret_cast<QLineEdit*>(sender());
-        QDialogButtonBox* buttonBox = nameEdit->parentWidget()->findChildren<QDialogButtonBox*>().at(0);
-
-        if (buttonBox)
-            foreach (QAbstractButton* button, buttonBox->buttons())
-                 if (buttonBox->buttonRole(button) == QDialogButtonBox::AcceptRole)
-                     button->setDisabled(disabled);
-    }
-
-    void MainDialog::resetVariables()
-    {
-         QMultiHash<QString, QVariant> env = defaults;
-
-         // reset all rows.
-         for (int row = 0; row < dialogUi->table->rowCount(); row++)
-         {
-             QString key = dialogUi->table->item(row, 0)->text();
-             if (env.keys().contains(key))
-             {
-                  QVariant data = dialogUi->table->model()->data(dialogUi->table->model()->index(row, 1));
-
-                  switch (data.type())
-                  {
-                       case QVariant::String:
-                            dialogUi->table->item(row, 1)->setText(env.value(key).toString());
-                       break;
-                       case QVariant::StringList:
-                            dialogUi->table->item(row, 1)->setText(env.value(key).toStringList().join("\n"));
-                       break;
-
-                       default: { qDebug() << "Unexpected situation occured."; } break;
-                  }
-             }
-             else // remove the row
-                 dialogUi->table->removeRow(row);
-         }
-    }
-
-    void MainDialog::updateVariable(QModelIndex cell, const QString &find, const QString &replace)
-    {
-        qDebug() << cell << find << replace;
-    }
-
-    void MainDialog::updateTableVariable()
+    void MainDialog::resetTable()
     {
 
     }
 
-    void MainDialog::contextMenu(QPoint)
+    void MainDialog::contextMenu()
     {
         QMenu menu;
 
-        QAction* editAction = menu.addAction("Edit variable");
-        connect(editAction, &QAction::triggered, this, &MainDialog::editVariable);
-
         QAction* removeAction = menu.addAction("Remove variable");
+        removeAction->setShortcut(QKeySequence(Qt::Key_Delete)); 
         connect(removeAction, &QAction::triggered, this, &MainDialog::removeVariable);
 
         menu.exec(QCursor::pos());
     }
 
-    void MainDialog::commitEditorData(QWidget *editor)
+    void MainDialog::addVariable()
     {
-        QLineEdit* lineEdit = retype<QLineEdit*>(editor);
-        QString senderName = sender()->objectName();
-        QTableWidgetItem* currentItem = dialogUi->table->currentItem();
+         variableDialog->setDialogMode(VariableDialog::AddVariable);
+         int result = variableDialog->exec();
 
-        if (senderName == "vars_table_item_delegate")
-        {
-            // set to model the data...
-            dialogUi->table->model()->setData(
-                 dialogUi->table->model()->index(currentItem->row(),currentItem->column()), lineEdit->text());
-        }
-        else
-        {
-            QListWidget* currentListWidget = retype<QListWidget*>
-                                                (dialogUi->table->cellWidget(currentItem->row(),currentItem->column()));
-            // if the new content is empty, remove row...
-            if (lineEdit->text().trimmed().isEmpty())
-            {
-                currentListWidget->model()->removeRow(currentListWidget->currentRow());
+         if (result == QDialog::Accepted)
+         {
+             QString name = variableDialog->variableName();
+             QVariant val = variableDialog->variableValue();
+             qDebug() << val;
+             Variable::Type type = variableDialog->variableType();
 
-                // ...and if it is only single row now, get last thing from StringList
-                // and jump from StringList to string.
-                if (currentListWidget->count() == 1)
-                {
-                    QString lastItem = currentListWidget->item(0)->text();
-                    currentItem->setText(lastItem.trimmed());
-                }
-            }
-            else
-            {
-                currentListWidget->model()->setData(currentListWidget->currentIndex(), lineEdit->text());
-            }
-        }
+             QString str;
+             if (val.type() == QMetaType::QString)
+                 str = val.toString();
+             if (val.type() == QMetaType::QStringList)
+                 str = val.toStringList().join("\n");
 
-        updateVariable(dialogUi->table->currentIndex(), currentItem->text(), lineEdit->text());
+             QTableWidgetItem* nameItem = new QTableWidgetItem(name);
+             QTableWidgetItem* valueItem = new QTableWidgetItem(str);
+
+             ui->mainTable->setRowCount(ui->mainTable->rowCount()+1);
+             ui->mainTable->setItem(ui->mainTable->rowCount()-1, 0, nameItem);
+             ui->mainTable->setItem(ui->mainTable->rowCount()-1, 1, valueItem);
+
+             if (type == Variable::Global)
+                 variableManager->addGlobalVariable(name, val);
+             else
+                 variableManager->addUserVariable(name, val);
+         }
     }
 
-
-    void MainDialog::editVariable()
+    void MainDialog::editVariable(QTableWidgetItem* item)
     {
-        qDebug() << "[editVariable]" << sender() << endl;
+        QString oldName = item->text();
+        variableDialog->setDialogMode(VariableDialog::EditVariable);
+        variableDialog->setVariableName(ui->mainTable->item(item->row(), 0)->text());
+        variableDialog->setVariableValue(ui->mainTable->item(item->row(), 1)->text());
 
-        dialogUi->editVariableDialog->nameEdit->setText(
-                    dialogUi->table->model()->data(
-                        dialogUi->table->model()->index(
-                            dialogUi->table->currentItem()->row(), 0
-                            )).toString());
-
-        QVariant data = dialogUi->table->model()->data(dialogUi->table->model()->index(dialogUi->table->currentItem()->row(), 1));
-
-        QStringList dataList = data.toString().split("\n");
-        int count = dialogUi->editVariableDialog->itemList->count();
-        foreach (QString item, dataList) {
-            QListWidgetItem* listItem = new QListWidgetItem(item);
-            listItem->setFlags(listItem->flags()|Qt::ItemIsEditable);
-            dialogUi->editVariableDialog->itemList->insertItem(count - 1, listItem);
-        }
-
-        dialogUi->editVariableDialog->valueEdit->setText(data.toString().replace("\n", ";"));
-        dialogUi->editVariableDialog->multiValuesCheck->setChecked(true);
-        dialogUi->editVariableDialog->nameEdit->setFocus();
-
-        int result = dialogUi->editVariableDialog->dialog->exec();
+        int result = variableDialog->exec();
         if (result == QDialog::Accepted)
         {
+            QString name = variableDialog->variableName();
+            QVariant val = variableDialog->variableValue();
+
+            QString str;
+            if (val.type() == QMetaType::QString)
+                str = val.toString();
+            if (val.type() == QMetaType::QStringList)
+                str = val.toStringList().join("\n");
+
+            ui->mainTable->item(item->row(), 0)->setText(name);
+            ui->mainTable->item(item->row(), 1)->setText(str);
+            ui->mainTable->resizeRowToContents(item->row());
+            ui->mainTable->resizeColumnToContents(0);
+            ui->mainTable->resizeColumnToContents(1);
+
+            // reset variable
+            Variable var;
+            var.name = name;
+            var.value = val;
+            var.defaultValue = variableManager->variable(oldName).defaultValue;
 
         }
     }
 
     void MainDialog::removeVariable()
     {
-        QString variableName = dialogUi->table->model()->data(dialogUi->table->model()->index(dialogUi->table->currentIndex().row(), 0)).toString();
+        QList<QTableWidgetItem*> selection = ui->mainTable->selectedItems();
+        QTableWidgetItem* nameItem = selection.at(0);
 
-        qDebug() << "[removeVariable] " << variableName << endl;
-        variables.insert(variableName, QVariant(QString("")));
-
-        dialogUi->table->removeRow(dialogUi->table->currentItem()->row());
+        ui->mainTable->removeRow(ui->mainTable->row(nameItem));
+        variableManager->removeVariable(nameItem->text());
     }
 
-    void MainDialog::saveVariables()
+    void MainDialog::saveEnvironment()
     {
-      //  expandEnvironment(variables);
+        variableManager->dumpVariables(Variable::Global);
+        variableManager->saveVariables();
     }
 
+    void MainDialog::exportEnvironment()
+    {
+        QString filterType;
+        QString fileName = QFileDialog::getSaveFileName(0, "Save to file...", QString(),
+                                     QString("HTML (*.html);;Text file (*.log)"),
+                                     &filterType);
+        qDebug() << fileName << filterType;
+
+        if (fileName.isEmpty() && filterType.isEmpty())
+            return;
+        else
+        {
+            if (filterType == "Text file (*.log)")
+               exportPlainText(fileName);
+            else
+               exportHtml(fileName);
+        }
+    }
+
+    void MainDialog::exportHtml(const QString &file)
+    {
+        QFile fileHandle(file);
+
+        if (!fileHandle.open(QFile::WriteOnly|QFile::Text))
+            QMessageBox::critical(0, QString("Error"),
+                                  QString("Error occured:").append(fileHandle.errorString())
+                                  .append("Canceling export."));
+        else
+        {
+            QFile f("://template.html");
+            f.open(QFile::ReadOnly);
+
+            QString templateFile = f.readAll();
+            QString timestamp = QTime::currentTime().toString();
+
+            wchar_t ch_user[128];
+            DWORD d = 128;
+            GetComputerNameW(ch_user, &d); // WinAPI
+
+            QString compName = QString::fromWCharArray(ch_user, d);
+
+            QString tmpStr("");
+            for (int row = 0; row < ui->mainTable->rowCount(); ++row)
+            {
+                QString name = ui->mainTable->item(row, 0)->text();
+                QString val = ui->mainTable->item(row, 1)->text();
+                tmpStr.append("           <tr>\r\n                <td>");
+                tmpStr.append(name).append("</td>\r\n                <td>\r\n");
+
+                QStringList list = (val.contains("\n")) ? val.split("\n") : QStringList(val);
+                foreach(QString value, list) tmpStr.append("             " + value + "<br>\r\n");
+
+                tmpStr.append("           </tr>\r\n");
+            }
+
+            fileHandle.write(templateFile.arg(compName, timestamp, tmpStr).toStdString().c_str());
+            fileHandle.close();
+        }
+    }
+
+    void MainDialog::exportPlainText(const QString &file)
+    {
+        QFile fileHandle(file);
+
+        if (!fileHandle.open(QFile::WriteOnly|QFile::Text))
+            QMessageBox::critical(0, QString("Error"),
+                                  QString("Error occured:").append(fileHandle.errorString())
+                                  .append("Canceling export."));
+        else
+        {
+            for (int row = 0; row < ui->mainTable->rowCount(); ++row)
+            {
+                QString name = ui->mainTable->item(row, 0)->text();
+                QString val = ui->mainTable->item(row, 1)->text();
+
+                QStringList list = (val.contains("\n")) ? val.split("\n") : QStringList(val);
+                fileHandle.write(QString("Name: %1 \r\n").arg(name).toStdString().c_str());
+                fileHandle.write("Value(s):\r\n");
+
+                foreach(QString value, list)
+                    fileHandle.write(QString("       %1\r\n").arg(value).toStdString().c_str());
+
+                fileHandle.write("-----------------------------------------------\r\n");
+            }
+            fileHandle.close();
+        }
+    }
 }
 
