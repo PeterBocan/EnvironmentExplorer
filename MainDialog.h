@@ -1,6 +1,14 @@
 #ifndef MAINDIALOG_H
 #define MAINDIALOG_H
 
+/*
+* This is a part of EnvironmentExplorer program
+* which is licensed under LGPLv2.
+*
+* Github: https://github.com/PeterBocan/EnvironmentExplorer
+* Author: https://twitter.com/PeterBocan
+*/
+
 #include <QtWidgets/QWidget>
 
 class QTableWidgetItem;
@@ -11,6 +19,7 @@ namespace EnvironmentExplorer
     class VariablesManager;
     class VariableDialog;
 
+    // Main window.
     class MainDialog : public QWidget
     {
         Q_OBJECT
@@ -23,6 +32,8 @@ namespace EnvironmentExplorer
 
         // Dialog
         VariableDialog* variableDialog;
+
+        int count_systems;
 
     public:
             MainDialog(QWidget *parent = 0);

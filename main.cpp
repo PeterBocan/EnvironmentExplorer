@@ -1,3 +1,11 @@
+/*
+* This is a part of EnvironmentExplorer program
+* which is licensed under LGPLv2.
+*
+* Github: https://github.com/PeterBocan/EnvironmentExplorer
+* Author: https://twitter.com/PeterBocan
+*/
+
 #include <QApplication>
 #include <qt_windows.h>
 

@@ -15,6 +15,8 @@
 
 namespace EnvironmentExplorer
 {
+    static QColor globalsVariablesColor = QColor(255,247,193);
+    static QColor localsVariablesColor = QColor(255,255,255);
 
     MainDialog::MainDialog(QWidget *parent)
         : QWidget(parent), ui(new UserInterface()),
@@ -54,7 +56,7 @@ namespace EnvironmentExplorer
         QList<Variable> systems = variableManager->systemEnvironment();
         QList<Variable> locals = variableManager->userEnvironment();
 
-        int count_systems = systems.count();
+            count_systems = systems.count();
         int count_locals = locals.count();
         ui->mainTable->setRowCount(count_locals + count_systems);
 
@@ -62,7 +64,7 @@ namespace EnvironmentExplorer
         {
             Variable var = systems.at(i);
             QTableWidgetItem* nameItem = new QTableWidgetItem(var.name);
-            nameItem->setBackground(QBrush(QColor(255,247,193)));
+            nameItem->setBackground(QBrush(globalsVariablesColor));
 
             QString result = var.defaultValue.toString();
             if (var.defaultValue.type() == QMetaType::QStringList ||
@@ -70,7 +72,7 @@ namespace EnvironmentExplorer
                 result = var.defaultValue.toStringList().join("\n");
 
             QTableWidgetItem* valueItem = new QTableWidgetItem(result);
-            valueItem->setBackground(QBrush(QColor(255,247,193)));
+            valueItem->setBackground(QBrush(globalsVariablesColor));
 
             ui->mainTable->setItem(i, 0, nameItem);
             ui->mainTable->setItem(i, 1, valueItem);
@@ -80,6 +82,7 @@ namespace EnvironmentExplorer
         {
             Variable var = locals.at(i);
             QTableWidgetItem* nameItem = new QTableWidgetItem(var.name);
+            nameItem->setBackground(QBrush(localsVariablesColor));
 
             QString result = var.defaultValue.toString();
             if (var.defaultValue.type() == QMetaType::QStringList ||
@@ -87,6 +90,7 @@ namespace EnvironmentExplorer
                 result = var.defaultValue.toStringList().join("\n");
 
             QTableWidgetItem* valueItem = new QTableWidgetItem(result);
+            valueItem->setBackground(QBrush(localsVariablesColor));
 
             ui->mainTable->setItem(i + count_systems, 0, nameItem);
             ui->mainTable->setItem(i + count_systems, 1, valueItem);
@@ -98,7 +102,7 @@ namespace EnvironmentExplorer
 
     void MainDialog::resetTable()
     {
-
+        /// NOT DONE YET...
     }
 
     void MainDialog::contextMenu()
@@ -121,7 +125,6 @@ namespace EnvironmentExplorer
          {
              QString name = variableDialog->variableName();
              QVariant val = variableDialog->variableValue();
-             qDebug() << val;
              Variable::Type type = variableDialog->variableType();
 
              QString str;
@@ -130,12 +133,19 @@ namespace EnvironmentExplorer
              if (val.type() == QMetaType::QStringList)
                  str = val.toStringList().join("\n");
 
+             QColor background = (type == Variable::Global) ? globalsVariablesColor : localsVariablesColor;
+
              QTableWidgetItem* nameItem = new QTableWidgetItem(name);
+             nameItem->setBackground(QBrush(background));
              QTableWidgetItem* valueItem = new QTableWidgetItem(str);
+             valueItem->setBackground(QBrush(background));
 
              ui->mainTable->setRowCount(ui->mainTable->rowCount()+1);
-             ui->mainTable->setItem(ui->mainTable->rowCount()-1, 0, nameItem);
-             ui->mainTable->setItem(ui->mainTable->rowCount()-1, 1, valueItem);
+
+             int row = (type == Variable::Global) ? count_systems : ui->mainTable->rowCount();
+
+             ui->mainTable->setItem(row-1, 0, nameItem);
+             ui->mainTable->setItem(row-1, 1, valueItem);
 
              if (type == Variable::Global)
                  variableManager->addGlobalVariable(name, val);
@@ -189,7 +199,6 @@ namespace EnvironmentExplorer
 
     void MainDialog::saveEnvironment()
     {
-        variableManager->dumpVariables(Variable::Global);
         variableManager->saveVariables();
     }
 
@@ -214,7 +223,14 @@ namespace EnvironmentExplorer
 
     void MainDialog::exportHtml(const QString &file)
     {
-        QFile fileHandle(file);
+        QString escapedName;
+        if (!file.endsWith(".html") && file.contains("."))
+        {
+            QString nakedName = file.left(file.lastIndexOf(".") - 1); // excluding dot
+            escapedName = nakedName.append(".html");
+        }
+
+        QFile fileHandle(escapedName);
 
         if (!fileHandle.open(QFile::WriteOnly|QFile::Text))
             QMessageBox::critical(0, QString("Error"),
@@ -255,7 +271,14 @@ namespace EnvironmentExplorer
 
     void MainDialog::exportPlainText(const QString &file)
     {
-        QFile fileHandle(file);
+        QString escapedName;
+        if (!file.endsWith(".log") && file.contains("."))
+        {
+            QString nakedName = file.left(file.lastIndexOf(".") - 1); // excluding dot
+            escapedName = nakedName.append(".log");
+        }
+
+        QFile fileHandle(escapedName);
 
         if (!fileHandle.open(QFile::WriteOnly|QFile::Text))
             QMessageBox::critical(0, QString("Error"),

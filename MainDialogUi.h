@@ -1,6 +1,18 @@
 #ifndef MAINDIALOGUI_H
 #define MAINDIALOGUI_H
 
+/*
+* This is a part of EnvironmentExplorer program
+* which is licensed under LGPLv2.
+*
+* Github: https://github.com/PeterBocan/EnvironmentExplorer
+* Author: https://twitter.com/PeterBocan
+*/
+
+//
+// This is a UI implementation header file.
+//
+
 #include <QtCore/QStringList>
 
 #include <QtWidgets/QMenu>

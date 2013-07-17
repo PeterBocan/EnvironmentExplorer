@@ -1,6 +1,18 @@
 #ifndef VARIABLESMANAGER_H
 #define VARIABLESMANAGER_H
 
+/*
+* This is a part of EnvironmentExplorer program
+* which is licensed under LGPLv2.
+*
+* Github: https://github.com/PeterBocan/EnvironmentExplorer
+* Author: https://twitter.com/PeterBocan
+*/
+
+//
+// VariablesManager class handles a variable management.
+//
+
 #include <QSettings>
 #include <QVariant>
 #include <QObject>
