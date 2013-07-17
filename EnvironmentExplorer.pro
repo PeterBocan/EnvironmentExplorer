@@ -17,3 +17,8 @@ HEADERS += MainDialog.h \
 
 RESOURCES += \
     resources.qrc
+
+win32 {
+    CONFIG += embed_manifest_exe
+    QMAKE_LFLAGS_WINDOWS += /MANIFESTUAC:level=\'requireAdministrator\'
+}

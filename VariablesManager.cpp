@@ -3,7 +3,7 @@
 #include <QSettings>
 #include <QStringList>
 #include <QDebug>
-#include "Globals.h"
+
 
 namespace EnvironmentExplorer
 {
@@ -106,7 +106,6 @@ namespace EnvironmentExplorer
                 }
             }
         }
-
     }
 
     void VariablesManager::dumpVariables(Variable::Type t)
