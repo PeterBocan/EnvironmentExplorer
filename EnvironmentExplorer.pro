@@ -23,10 +23,20 @@ HEADERS += MainDialog.h \
            VariablesManager.h \
            MainDialogUi.h
 
+LIBS += -ladvapi32
+
 RESOURCES += \
     resources.qrc
 
-win32 {
-    CONFIG += embed_manifest_exe
-    QMAKE_LFLAGS_WINDOWS += /MANIFESTUAC:level=\'requireAdministrator\'  # require administrator privileges to run in order to save variables...
+# Use external as a file...
+win32-g++ {
+    CONFIG -= embed_manifest_exe
+    QMAKE_CXXFLAGS += -std=c++0x
 }
+
+win32-msvc2012 {
+    # require administrator privileges to run in order to save variables...
+    CONFIG += embed_manifest_exe
+    QMAKE_LFLAGS_WINDOWS += /MANIFESTUAC:level=\'requireAdministrator\'
+}
+
