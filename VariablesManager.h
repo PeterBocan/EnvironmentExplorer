@@ -26,6 +26,9 @@ namespace EnvironmentExplorer
     {
         // Represents the name of env. var.
         QString name;
+        // Stores the default name
+        QString defaultName;
+
         // Represents the current value.
         QVariant value;
         // Represents the default value

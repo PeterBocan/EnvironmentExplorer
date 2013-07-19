@@ -203,6 +203,7 @@ namespace EnvironmentExplorer
         {
             Variable var;
             var.name = key;
+            var.defaultName = key;
             var.type = t;
             QString val = set.value(key).toString();
 
