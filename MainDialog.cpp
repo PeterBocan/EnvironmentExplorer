@@ -25,8 +25,8 @@ namespace EnvironmentExplorer
         PSID AdministratorsGroup;
 
         result = AllocateAndInitializeSid(&NtAuthority, 2,
-            SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS,
-            0, 0, 0, 0, 0, 0, &AdministratorsGroup);
+                 SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS,
+                 0, 0, 0, 0, 0, 0, &AdministratorsGroup);
 
         if(result)
         {
@@ -38,7 +38,6 @@ namespace EnvironmentExplorer
 
         return (result ? true : false);
     }
-
 
     MainDialog::MainDialog(QWidget *parent)
         : QWidget(parent), ui(new UserInterface()),
@@ -133,6 +132,26 @@ namespace EnvironmentExplorer
             Variable var = variableManager->variable(variableName);
 
             qDebug() << var.defaultName << var.name << var.defaultValue << var.value;
+
+            if (var.defaultName.isEmpty())
+            {   // non-existing variable, remove.
+                ui->mainTable->removeRow(row);
+                continue;
+            }
+
+            if (var.defaultName != var.name)
+            {   // restore default name
+                ui->mainTable->item(row, 0)->setText(var.defaultName);
+            }
+
+            if (var.defaultValue != var.value)
+            {   // restore default values.
+                QString result = ((var.defaultValue.type() == QVariant::StringList) ?
+                                      var.defaultValue.toStringList().join("\n") :
+                                      var.defaultValue.toString());
+                ui->mainTable->item(row, 1)->setText(result);
+            }
+
         }
     }
 
@@ -229,14 +248,12 @@ namespace EnvironmentExplorer
         QList<QTableWidgetItem*> selection = ui->mainTable->selectedItems();
         QTableWidgetItem* nameItem = selection.at(0);
 
-        ui->mainTable->removeRow(ui->mainTable->row(nameItem));
         variableManager->removeVariable(nameItem->text());
+        ui->mainTable->removeRow(ui->mainTable->row(nameItem));
     }
 
     void MainDialog::saveEnvironment()
-    {
-        variableManager->saveVariables();
-    }
+    { variableManager->saveVariables(); }
 
     void MainDialog::exportEnvironment()
     {
@@ -244,7 +261,6 @@ namespace EnvironmentExplorer
         QString fileName = QFileDialog::getSaveFileName(0, "Save to file...", QString(),
                                      QString("HTML (*.html);;Text file (*.log)"),
                                      &filterType);
-        qDebug() << fileName << filterType;
 
         if (fileName.isEmpty() && filterType.isEmpty())
             return;
