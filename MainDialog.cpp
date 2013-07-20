@@ -18,6 +18,28 @@ namespace EnvironmentExplorer
     static QColor globalsVariablesColor = QColor(255,247,193);
     static QColor localsVariablesColor = QColor(255,255,255);
 
+    bool isInvokerAdmin()
+    {
+        BOOL result;
+        SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+        PSID AdministratorsGroup;
+
+        result = AllocateAndInitializeSid(&NtAuthority, 2,
+            SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS,
+            0, 0, 0, 0, 0, 0, &AdministratorsGroup);
+
+        if(result)
+        {
+            if (!CheckTokenMembership(NULL, AdministratorsGroup, &result))
+                 result = FALSE;
+
+            FreeSid(AdministratorsGroup);
+        }
+
+        return (result ? true : false);
+    }
+
+
     MainDialog::MainDialog(QWidget *parent)
         : QWidget(parent), ui(new UserInterface()),
           variableManager(new VariablesManager()),
@@ -29,6 +51,9 @@ namespace EnvironmentExplorer
         resize(850, 600);
 
         initConnections();
+
+        if (!isInvokerAdmin())
+            ui->saveButton->setDisabled(true);
 
         variableManager->loadVariables();
         fillTable();
@@ -102,7 +127,13 @@ namespace EnvironmentExplorer
 
     void MainDialog::resetTable()
     {
-        /// NOT DONE YET...
+        for (int row = 0; row < ui->mainTable->rowCount(); ++row)
+        {
+            QString variableName = ui->mainTable->item(row, 0)->text();
+            Variable var = variableManager->variable(variableName);
+
+            qDebug() << var.defaultName << var.name << var.defaultValue << var.value;
+        }
     }
 
     void MainDialog::contextMenu()
@@ -156,9 +187,9 @@ namespace EnvironmentExplorer
 
     void MainDialog::editVariable(QTableWidgetItem* item)
     {
-        QString oldName = item->text();
+        QString oldName = ui->mainTable->item(item->row(), 0)->text();
         variableDialog->setDialogMode(VariableDialog::EditVariable);
-        variableDialog->setVariableName(ui->mainTable->item(item->row(), 0)->text());
+        variableDialog->setVariableName(oldName);
         variableDialog->setVariableValue(ui->mainTable->item(item->row(), 1)->text());
 
         int result = variableDialog->exec();
@@ -183,8 +214,13 @@ namespace EnvironmentExplorer
             Variable var;
             var.name = name;
             var.value = val;
-            var.defaultValue = variableManager->variable(oldName).defaultValue;
 
+            Variable oldVariable = variableManager->variable(oldName);
+            variableManager->removeVariable(oldName); // We can not have a duplicate.
+            var.defaultName = oldVariable.defaultName;
+            var.defaultValue = oldVariable.defaultValue;
+
+            variableManager->addVariable(var);
         }
     }
 
