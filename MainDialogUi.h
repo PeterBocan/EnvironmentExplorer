@@ -40,6 +40,18 @@ namespace EnvironmentExplorer
     //
     // UI structure.
     //
+    class DeleteKeyEventFilter : public QObject
+    {
+        Q_OBJECT
+
+    public:
+        DeleteKeyEventFilter(QObject* parent = 0)
+            : QObject(parent) {}
+
+        bool eventFilter(QObject *obj, QEvent *e);
+    signals:
+        void deleteKeyPressed();
+    };
 
     // VariableDialog
     class VariableDialog : public QDialog

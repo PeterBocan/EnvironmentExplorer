@@ -1,3 +1,12 @@
+
+/*
+* This is a part of EnvironmentExplorer program
+* which is licensed under LGPLv2.
+*
+* Github: https://github.com/PeterBocan/EnvironmentExplorer
+* Author: https://twitter.com/PeterBocan
+*/
+
 #include "MainDialog.h"
 #include "MainDialogUi.h"
 #include "VariablesManager.h"
@@ -53,6 +62,8 @@ namespace EnvironmentExplorer
 
         if (!isInvokerAdmin())
             ui->saveButton->setDisabled(true);
+
+
 
         variableManager->loadVariables();
         fillTable();

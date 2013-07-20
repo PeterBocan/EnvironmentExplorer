@@ -1,11 +1,33 @@
+
+/*
+* This is a part of EnvironmentExplorer program
+* which is licensed under LGPLv2.
+*
+* Github: https://github.com/PeterBocan/EnvironmentExplorer
+* Author: https://twitter.com/PeterBocan
+*/
+
 #include "MainDialogUi.h"
 
 #include <QRegExpValidator>
+#include <QKeyEvent>
 #include <QRegExp>
 #include <QDebug>
 
 namespace EnvironmentExplorer
 {
+    bool DeleteKeyEventFilter::eventFilter(QObject *obj, QEvent *e)
+    {
+        if (e->type() == QEvent::KeyPress) {
+            QKeyEvent* event = dynamic_cast<QKeyEvent*>(e);
+            if (event->key() == Qt::Key_Delete) {
+                emit deleteKeyPressed();
+                return true;
+            }
+        }
+        return obj->eventFilter(obj,e);
+    }
+
     VariableDialog::VariableDialog(QWidget* parent)
         : QDialog(parent)
     {
@@ -66,11 +88,23 @@ namespace EnvironmentExplorer
         });
 
         itemsList = new QListWidget();
+        DeleteKeyEventFilter* filter = new DeleteKeyEventFilter();
+        itemsList->installEventFilter(filter);
         itemsList->setEditTriggers(QListWidget::DoubleClicked);
 
         QListWidgetItem* addValueItem = new QListWidgetItem(itemsList);
         addValueItem->setText("Add new value...");
         addValueItem->setFlags(Qt::ItemIsEnabled|Qt::ItemIsSelectable);
+
+        connect(filter, &DeleteKeyEventFilter::deleteKeyPressed, [&](){
+            QList<QListWidgetItem*> selection = itemsList->selectedItems();
+
+            foreach (QListWidgetItem* item, selection)
+            {
+               delete item;
+            }
+
+        });
 
         connect(itemsList, &QListWidget::itemDoubleClicked,
             [&](QListWidgetItem* item){
