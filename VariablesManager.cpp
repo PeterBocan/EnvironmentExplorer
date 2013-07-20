@@ -218,7 +218,7 @@ namespace EnvironmentExplorer
         return result;
     }
 
-    const Variable& VariablesManager::variable(const QString& name) const
+    Variable VariablesManager::variable(const QString& name) const
     {
         if (locals.contains(name))
             return locals[name];
@@ -249,4 +249,11 @@ namespace EnvironmentExplorer
         return false;
     }
 
+    void VariablesManager::addVariable(const Variable &var)
+    {
+        if (var.type == Variable::Global)
+            globals.insert(var.name, var);
+        else
+            locals.insert(var.name, var);
+    }
 }

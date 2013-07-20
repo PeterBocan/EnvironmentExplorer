@@ -69,9 +69,11 @@ namespace EnvironmentExplorer
           QList<Variable> userEnvironment() const;
           QList<Variable> systemEnvironment() const;
 
-          const Variable& variable(const QString& name) const;
+          Variable variable(const QString& name) const;
 
           void dumpVariables(Variable::Type t);
+
+          void addVariable(const Variable &var);
 
     protected:
 
