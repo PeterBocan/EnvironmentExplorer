@@ -1,5 +1,7 @@
 #include "MainDialogUi.h"
 
+#include <QRegExpValidator>
+#include <QRegExp>
 #include <QDebug>
 
 namespace EnvironmentExplorer
@@ -12,7 +14,11 @@ namespace EnvironmentExplorer
 
         mainLayout = new QGridLayout(this);
 
+        QRegExp rx("^[A-Z][0-9A-Z]*$");
+        QRegExpValidator* v = new QRegExpValidator(rx);
         nameEdit = new QLineEdit();
+        nameEdit->setValidator(v);
+
         nameLabel = new QLabel("Name:");
         nameLabel->setBuddy(nameEdit);
         connect(nameEdit, &QLineEdit::textChanged, [&](const QString &text){
