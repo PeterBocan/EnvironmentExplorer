@@ -194,8 +194,9 @@ namespace EnvironmentExplorer
 
              int row = (type == Variable::Global) ? count_systems : ui->mainTable->rowCount();
 
-             ui->mainTable->setItem(row-1, 0, nameItem);
-             ui->mainTable->setItem(row-1, 1, valueItem);
+             ui->mainTable->insertRow(row);
+             ui->mainTable->setItem(row, 0, nameItem);
+             ui->mainTable->setItem(row, 1, valueItem);
 
              if (type == Variable::Global)
                  variableManager->addGlobalVariable(name, val);
